@@ -2,6 +2,7 @@ package com.lgnanni.bambuser.viewmodel
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -20,8 +21,8 @@ class MainViewModel : ViewModel() {
     private var _photos = MutableLiveData(emptyList<Photo>())
     val photos: LiveData<List<Photo>> = _photos
 
-    private var _selectedPhoto = MutableLiveData("")
-    val selectedPhoto: LiveData<String> = _selectedPhoto
+    private var _selectedPhoto = MutableLiveData(Photo())
+    val selectedPhoto: LiveData<Photo> = _selectedPhoto
 
     private var _loading = MutableLiveData(false)
     val loading: LiveData<Boolean> = _loading
@@ -31,6 +32,9 @@ class MainViewModel : ViewModel() {
 
     private var _isConnected = MutableLiveData(false)
     val isConnected: LiveData<Boolean> = _isConnected
+
+    private var _darkTheme = MutableLiveData(false)
+    val darkTheme: LiveData<Boolean> = _darkTheme
 
     companion object {
         lateinit var retrofitClient: RetrofitClient
@@ -85,8 +89,8 @@ class MainViewModel : ViewModel() {
 
     }
 
-    fun setSelectedPhoto(photoUrl: String) {
-        _selectedPhoto.value = photoUrl
+    fun setSelectedPhoto(photo: Photo) {
+        _selectedPhoto.value = photo
     }
 
     fun setSearchText(text: String) {
@@ -101,5 +105,9 @@ class MainViewModel : ViewModel() {
         loadPhotos(
             context = context,
             tag = tag)
+    }
+
+    fun setDarkTheme(dark: Boolean) {
+        _darkTheme.value = dark
     }
 }

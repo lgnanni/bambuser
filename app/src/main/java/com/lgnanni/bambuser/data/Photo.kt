@@ -12,7 +12,7 @@ data class Photo (
     val isPublic: Boolean,
     val isFriend: Boolean,
     val isFamily: Boolean): Parcelable {
-    
+    constructor() : this("", "", "", -1, "", false, false, false)
     fun getUrl() : String {
         return StringBuilder()
             .append("https://live.staticflickr.com/")
