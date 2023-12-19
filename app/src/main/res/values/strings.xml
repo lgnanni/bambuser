@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Bambuser Demo</string>
+    <string name="no_connection">Please reconnect to search for a new value</string>
+</resources>

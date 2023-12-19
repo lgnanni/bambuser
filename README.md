@@ -1,2 +1,3 @@
-# Bambuser Android
-Bambuser demo app
+# Composable_demo
+
+Android app showing up API Call usage, Jetpack Composable and overall code
