@@ -1,57 +1,46 @@
+package com.lgnanni.bambuser
 
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.lgnanni.bambuser.MainActivity
-import com.lgnanni.bambuser.data.Movie
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.lgnanni.bambuser.viewmodel.MainViewModel
-import org.junit.Before
+import com.nhaarman.mockitokotlin2.mock
+import com.nhaarman.mockitokotlin2.verify
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+@ExperimentalAnimationApi
 class MainActivityTest {
 
-    @JvmField
-    @Rule
-    val composeTestRule = createComposeRule()
+    @get:Rule
+    val composeTestRule = createAndroidComposeRule<MainActivity>()
 
-    private lateinit var viewModel: MainViewModel
+    @Test
+    fun testSearchText() {
+        val mockedViewModel: MainViewModel = mock()
+        // Perform UI actions using Compose UI Test library
+        composeTestRule.onNodeWithText("Filter title").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Filter title").performTextInput("Test Text")
 
-    @Before
-    fun setUp() {
-        // Initialize your ViewModel
-        viewModel = MainViewModel()
+        // Add assertions or verifications based on your test scenario
+        // For example, you might want to verify that the ViewModel's setSearchText method is called
+        verify(mockedViewModel).setSearchText("Test Text")
     }
 
     @Test
-    fun movieListLayout_displaysMovieList() {
-        // Given a list of movies
-        val movies = listOf(
-            Movie(title = "Movie 1"),
-            Movie(title = "Movie 2"),
-            Movie(title = "Movie 3")
-        )
+    fun testSaveImage() {
+        // Mock the necessary dependencies, e.g., Bitmap
+        // Perform UI actions using Compose UI Test library
+        composeTestRule.onNodeWithText("Save Image").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Save Image").performClick()
 
-        // When the MovieListLayout is displayed
-        composeTestRule.setContent {
-            Scaffold {
-                Surface {
-                    MainActivity().MovieListLayout(it)
-                }
-            }
-        }
-
-        // Then each movie title should be displayed
-        movies.forEach { movie ->
-            composeTestRule
-                .onNodeWithText(movie.title)
-                .assertIsDisplayed()
-        }
+        // Add assertions or verifications based on your test scenario
+        // For example, you might want to verify that the saveToStorage method is called with the correct parameters
+        // Mockito.verify(viewModel).saveToStorage(bitmap)
     }
 
-    // Add more test cases as needed...
+    // Add more tests as needed
 }

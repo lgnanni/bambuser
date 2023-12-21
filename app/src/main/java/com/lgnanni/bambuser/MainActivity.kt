@@ -1,6 +1,7 @@
 package com.lgnanni.bambuser
 
 import android.content.ContentValues
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build.*
@@ -18,7 +19,6 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons.Filled
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,8 +52,7 @@ import java.io.OutputStream
 
 class MainActivity : ComponentActivity() {
 
-   val viewModel: MainViewModel by viewModels()
-
+   val mainViewModel: MainViewModel by viewModels()
     //Initialization of job
     private var job = Job()
 
@@ -66,20 +66,22 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BambuserDemoTheme {
-                viewModel.setDarkTheme(isSystemInDarkTheme())
                 MovieListLayout()
             }
         }
 
-        viewModel.loadMovies(this)
+
     }
 
     @OptIn(
         ExperimentalCoroutinesApi::class,
-        ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class
+        ExperimentalMaterial3Api::class
     )
     @Composable
-    fun MovieListLayout(paddingDefaults: PaddingValues = PaddingValues(0.dp)) {
+    fun MovieListLayout(viewModel: MainViewModel = mainViewModel) {
+
+        viewModel.setDarkTheme(isSystemInDarkTheme())
+        viewModel.loadMovies(this)
         val darkTheme = viewModel.darkTheme.observeAsState(false)
 
         // Instead of always setting enabled to true at the beginning,
@@ -93,7 +95,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        ConnectivityStatus(viewModel = viewModel)
+        ConnectivityStatus(context = LocalContext.current, viewModel = viewModel)
 
         callback.isEnabled = viewModel.selectedMovie.observeAsState().value!!.title.isNotEmpty()
 
@@ -133,12 +135,13 @@ class MainActivity : ComponentActivity() {
                         }
 
                         MovieList(
+                            viewModel = viewModel,
                             movieList = moviesList!!,
                             movie = selectedMovie!!,
                             loading = loading
                         )
 
-                        MovieSelected(movie = selectedMovie)
+                        MovieSelected(viewModel = viewModel, movie = selectedMovie)
                     }
                 },
                 topBar = {
@@ -182,6 +185,7 @@ class MainActivity : ComponentActivity() {
          */
         @Composable
         fun MovieList(
+            viewModel: MainViewModel,
             movieList: List<Movie>,
             movie: Movie,
             loading: Boolean
@@ -194,6 +198,7 @@ class MainActivity : ComponentActivity() {
                     exit = fadeOut()
                 ) {
                     TextSearchBar(
+                        viewModel = viewModel,
                         modifier = Modifier.padding(8.dp, 0.dp),
                         label = "Filter title"
                     )
@@ -204,7 +209,7 @@ class MainActivity : ComponentActivity() {
                     exit = fadeOut()
                 ) {
                     Spacer(Modifier.height(2.dp))
-                    MovieColumn(movieList)
+                    MovieColumn(viewModel = viewModel, movies = movieList)
                 }
                 AnimatedVisibility(
                     visible = movieList.isEmpty() && !loading,
@@ -226,11 +231,11 @@ class MainActivity : ComponentActivity() {
 
         @ExperimentalCoroutinesApi
         @Composable
-        fun ConnectivityStatus(viewModel: MainViewModel) {
+        fun ConnectivityStatus(context: Context, viewModel: MainViewModel) {
             // This will cause re-composition on every network state change
             val connection by connectivityState()
             val isConnected = connection === ConnectionState.Available
-            viewModel.setIsConnected(isConnected)
+            viewModel.setIsConnected(context, isConnected)
         }
 
         /**
@@ -238,7 +243,7 @@ class MainActivity : ComponentActivity() {
          * @param movie = The selected photo object, if any
          */
         @Composable
-        fun MovieSelected(movie: Movie) {
+        fun MovieSelected(viewModel: MainViewModel, movie: Movie) {
             AnimatedVisibility(
                 visible = movie.title.isNotEmpty(),
                 enter = slideInVertically(initialOffsetY = {
@@ -300,7 +305,7 @@ class MainActivity : ComponentActivity() {
                         .fillMaxWidth(0.9f),
                         onClick = {
                             scopeForSaving.launch {
-                                imageBitmap?.let { saveToStorage(it) }
+                                imageBitmap?.let { saveToStorage(viewModel = viewModel, it) }
                             }
                         }
                     ) {
@@ -315,16 +320,16 @@ class MainActivity : ComponentActivity() {
 
         @OptIn(ExperimentalFoundationApi::class)
         @Composable
-        fun MovieColumn(movies: List<Movie>) {
+        fun MovieColumn(viewModel: MainViewModel, movies: List<Movie>) {
             LazyColumn(content =  {
                     items(movies.size, key = { movies[it].id }) { movie ->
-                        MovieElement(movie = movies[movie], Modifier.animateItemPlacement())
+                        MovieElement(viewModel = viewModel, movie = movies[movie], Modifier.animateItemPlacement())
                     }
             })
         }
 
         @Composable
-        fun MovieElement(movie: Movie, modifier: Modifier) {
+        fun MovieElement(viewModel: MainViewModel, movie: Movie, modifier: Modifier) {
             Row(
                 modifier = modifier
                     .fillMaxWidth()
@@ -349,7 +354,7 @@ class MainActivity : ComponentActivity() {
                 GlideImage(
                     imageModel = movie.getMoviePoster(),
                     requestOptions = {
-                        //Make sure the image it's laoded in square shape and cached
+                        //Make sure the image it's loaded in square shape and cached
                         RequestOptions()
                             .override(90, 90)
                             .diskCacheStrategy(DiskCacheStrategy.ALL)
@@ -363,6 +368,7 @@ class MainActivity : ComponentActivity() {
 
         @Composable
         fun TextSearchBar(
+            viewModel: MainViewModel,
             modifier: Modifier = Modifier,
             label: String,
         ) {
@@ -386,7 +392,7 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        suspend fun saveToStorage(bitmap: Bitmap) {
+        suspend fun saveToStorage(viewModel: MainViewModel, bitmap: Bitmap) {
             withContext(Dispatchers.IO) {
                 val filename = "Bambuser_Demo_${System.currentTimeMillis()}.jpg"
                 var fos: OutputStream? = null

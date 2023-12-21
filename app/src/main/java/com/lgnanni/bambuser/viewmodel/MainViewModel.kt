@@ -11,7 +11,6 @@ import com.gcorp.retrofithelper.RetrofitClient
 import com.lgnanni.bambuser.data.Movie
 import com.lgnanni.bambuser.data.Movies
 
-
 class MainViewModel : ViewModel() {
 
     private var _movies = MutableLiveData(emptyList<Movie>())
@@ -70,13 +69,15 @@ class MainViewModel : ViewModel() {
                     override fun onError(response: Response<Movies>?) {
                         super.onError(response)
                         _loading.value = false
-                        Toast.makeText(context, response.toString(), Toast.LENGTH_LONG).show()
+                        val text = if(!_isConnected.value!!) "Please connect to the internet to fetch data" else response.toString()
+                        Toast.makeText(context, text, Toast.LENGTH_LONG).show()
                     }
 
                     override fun onFailed(e: Throwable?) {
                         super.onFailed(e)
                         _loading.value = false
-                        Toast.makeText(context, e?.message, Toast.LENGTH_LONG).show()
+                        val text = if(!_isConnected.value!!) "Please connect to the internet to fetch data" else e?.message
+                        Toast.makeText(context, text, Toast.LENGTH_LONG).show()
                     }
                 }).run(context)
 
@@ -93,8 +94,10 @@ class MainViewModel : ViewModel() {
         _searchText.value = text
     }
 
-    fun setIsConnected(connected: Boolean) {
+    fun setIsConnected(context: Context, connected: Boolean) {
         _isConnected.value = connected
+        if(connected && _movies.value!!.isEmpty())
+            loadMovies(context)
     }
     fun setDarkTheme(dark: Boolean) {
         _darkTheme.value = dark
