@@ -15,44 +15,29 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.ScrollableState
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.material3.*
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.Icons.Filled
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusState
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
-import com.lgnanni.bambuser.data.Photo
+import com.lgnanni.bambuser.data.Movie
 import com.lgnanni.bambuser.ui.theme.BambuserDemoTheme
 import com.lgnanni.bambuser.util.ConnectionState
 import com.lgnanni.bambuser.util.connectivityState
@@ -66,7 +51,7 @@ import java.io.OutputStream
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: MainViewModel by viewModels()
+   val viewModel: MainViewModel by viewModels()
 
     //Initialization of job
     private var job = Job()
@@ -82,11 +67,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             BambuserDemoTheme {
                 viewModel.setDarkTheme(isSystemInDarkTheme())
-                ImageGridLayout()
+                MovieListLayout()
             }
         }
 
-        viewModel.loadPhotos(this)
+        viewModel.loadMovies(this)
     }
 
     @OptIn(
@@ -94,10 +79,7 @@ class MainActivity : ComponentActivity() {
         ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class
     )
     @Composable
-    fun ImageGridLayout() {
-        val isRefreshing by remember { mutableStateOf(false) }
-        val pullRefreshState =
-            rememberPullRefreshState(isRefreshing, { viewModel.refresh(this@MainActivity) })
+    fun MovieListLayout(paddingDefaults: PaddingValues = PaddingValues(0.dp)) {
         val darkTheme = viewModel.darkTheme.observeAsState(false)
 
         // Instead of always setting enabled to true at the beginning,
@@ -107,13 +89,13 @@ class MainActivity : ComponentActivity() {
             false
         ) {
             override fun handleOnBackPressed() {
-                viewModel.setSelectedPhoto(Photo())
+                viewModel.setSelectedPhoto(Movie())
             }
         }
 
         ConnectivityStatus(viewModel = viewModel)
 
-        callback.isEnabled = viewModel.selectedPhoto.observeAsState().value!!.title.isNotEmpty()
+        callback.isEnabled = viewModel.selectedMovie.observeAsState().value!!.title.isNotEmpty()
 
         onBackPressedDispatcher.addCallback(this, callback)
 
@@ -125,17 +107,11 @@ class MainActivity : ComponentActivity() {
                 content = { padding ->
                     Box(
                         Modifier
-                            .pullRefresh(pullRefreshState)
-                            .padding(padding)
-                            //Need to make it scrollable to be able to swipe to refresh
-                            .scrollable(
-                                state = ScrollableState { 1f },
-                                orientation = Orientation.Vertical
-                            ),
+                            .padding(padding),
                         contentAlignment = Alignment.Center
                     ) {
-                        val photosList = viewModel.photos.observeAsState().value
-                        val selectedPhoto = viewModel.selectedPhoto.observeAsState().value
+                        val moviesList = viewModel.filterMovies.observeAsState().value
+                        val selectedMovie = viewModel.selectedMovie.observeAsState().value
                         val loading = viewModel.loading.observeAsState().value
 
                         //Loader indicator trying to get the api call for the photos
@@ -156,20 +132,13 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        ImageGallery(
-                            photosList = photosList!!,
-                            photo = selectedPhoto!!,
+                        MovieList(
+                            movieList = moviesList!!,
+                            movie = selectedMovie!!,
                             loading = loading
                         )
 
-                        ImageSelected(photo = selectedPhoto)
-
-                        PullRefreshIndicator(
-                            isRefreshing, pullRefreshState, Modifier.align(
-                                Alignment.TopCenter
-                            )
-                        )
-
+                        MovieSelected(movie = selectedMovie)
                     }
                 },
                 topBar = {
@@ -196,7 +165,7 @@ class MainActivity : ComponentActivity() {
                                 val icon = if (isDarkOn) Filled.LightMode else Filled.DarkMode
                                 Icon(
                                     imageVector = icon,
-                                    contentDescription = "Localized description"
+                                    contentDescription = "Light / Dark Switch"
                                 )
                             }
                         })
@@ -206,41 +175,51 @@ class MainActivity : ComponentActivity() {
 
         /**
          * Main view with search bar and photos list
-         * @param photosList = The list of Photo objects returned from Flickr photo.search
-         * @param photo = The selected photo object, if any
+         * @param movieList = The list of Photo objects returned from Flickr photo.search
+         * @param movie = The selected photo object, if any
          * @param searchText = The actual search text if any
          * @param loading = If we are retrieving Flick.photo.search
          */
         @Composable
-        fun ImageGallery(
-            photosList: List<Photo>,
-            photo: Photo,
+        fun MovieList(
+            movieList: List<Movie>,
+            movie: Movie,
             loading: Boolean
         ) {
-            AnimatedVisibility(
-                visible = photosList.isNotEmpty() && photo.id.isBlank() && !loading,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                AnimatedVisibility(
+                    visible = !loading,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
                     TextSearchBar(
                         modifier = Modifier.padding(8.dp, 0.dp),
-                        label = "Search",
-                        onDoneActionClick = {
-                            if (!viewModel.isConnected.value!!) {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    getString(R.string.no_connection),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                viewModel.loadPhotos(this@MainActivity, it)
-                            }
-
-                        }
+                        label = "Filter title"
                     )
+                }
+                AnimatedVisibility(
+                    visible = movieList.isNotEmpty() && movie.title.isBlank() && !loading,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
                     Spacer(Modifier.height(2.dp))
-                    PhotoGrid(photosList)
+                    MovieColumn(movieList)
+                }
+                AnimatedVisibility(
+                    visible = movieList.isEmpty() && !loading,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Text(
+                        text = "No movie found with that title",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .align(Alignment.CenterHorizontally),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -256,14 +235,18 @@ class MainActivity : ComponentActivity() {
 
         /**
          * The expanded view on selecting one item from the photos grid
-         * @param photo = The selected photo object, if any
+         * @param movie = The selected photo object, if any
          */
         @Composable
-        fun ImageSelected(photo: Photo) {
+        fun MovieSelected(movie: Movie) {
             AnimatedVisibility(
-                visible = photo.id.isNotEmpty(),
-                enter = scaleIn() + expandVertically(expandFrom = Alignment.CenterVertically),
-                exit = scaleOut() + shrinkVertically(shrinkTowards = Alignment.CenterVertically)
+                visible = movie.title.isNotEmpty(),
+                enter = slideInVertically(initialOffsetY = {
+                    it / 2
+                }),
+                exit = slideOutVertically(targetOffsetY = {
+                    it / 2
+                })
             ) {
                 Column(
                     modifier = Modifier
@@ -278,16 +261,19 @@ class MainActivity : ComponentActivity() {
                     //Bitmap prepared for if the user desires to save the image
                     var imageBitmap: Bitmap? = null
                     Box(modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
                         .fillMaxWidth(0.9f)
                         .fillMaxHeight(0.5f)
                         .background(MaterialTheme.colorScheme.outline)
                         .border(2.dp, MaterialTheme.colorScheme.primary)
+
                         //Dismiss expanded image
-                        .clickable { onBackPressedDispatcher.onBackPressed() }) {
+                        .clickable { onBackPressedDispatcher.onBackPressed() },
+                        ) {
                         GlideImage(
                             modifier = Modifier
                                 .align(Alignment.Center),
-                            imageModel = photo.getUrl(),
+                            imageModel = movie.getMoviePoster(),
                             success = {
                                 //Instead of just loading the image with Glide,
                                 // we keep a reference for storage saving
@@ -302,11 +288,11 @@ class MainActivity : ComponentActivity() {
 
                     Spacer(Modifier.height(8.dp))
 
-                    Text(modifier = Modifier.fillMaxWidth(0.9f), text = "Photo title: ${photo.title}")
+                    Text(modifier = Modifier.fillMaxWidth(0.9f), text = "Movie: ${movie.title}")
 
                     Spacer(Modifier.height(4.dp))
 
-                    Text(modifier = Modifier.fillMaxWidth(0.9f), text = "Photo owner: ${photo.owner}")
+                    Text(modifier = Modifier.fillMaxWidth(0.9f), text = "Description: ${movie.overview}")
 
                     Spacer(Modifier.weight(1f))
 
@@ -329,29 +315,39 @@ class MainActivity : ComponentActivity() {
 
         @OptIn(ExperimentalFoundationApi::class)
         @Composable
-        fun PhotoGrid(photos: List<Photo>) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                content = {
-                    items(photos.size) { photo ->
-                        PhotoElement(photo = photos[photo])
+        fun MovieColumn(movies: List<Movie>) {
+            LazyColumn(content =  {
+                    items(movies.size, key = { movies[it].id }) { movie ->
+                        MovieElement(movie = movies[movie], Modifier.animateItemPlacement())
                     }
-                })
+            })
         }
 
         @Composable
-        fun PhotoElement(photo: Photo) {
-            Box(
-                modifier = Modifier
-                    .size(110.dp)
-                    .padding(8.dp), contentAlignment = Alignment.Center
+        fun MovieElement(movie: Movie, modifier: Modifier) {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .border(2.dp, MaterialTheme.colorScheme.primary)
+                    .clickable { viewModel.setSelectedPhoto(movie) }
             ) {
-                CircularProgressIndicator()
-                GlideImage(
-                    imageModel = photo.getUrl(),
+                //CircularProgressIndicator()
+                Text(
+                    text = movie.title,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .border(1.dp, Color.White)
-                        .clickable { viewModel.setSelectedPhoto(photo) },
+                        .fillMaxWidth(0.75f)
+                        .align(Alignment.CenterVertically)
+                        .padding(8.dp)
+                )
+
+                GlideImage(
+                    imageModel = movie.getMoviePoster(),
                     requestOptions = {
                         //Make sure the image it's laoded in square shape and cached
                         RequestOptions()
@@ -359,8 +355,8 @@ class MainActivity : ComponentActivity() {
                             .diskCacheStrategy(DiskCacheStrategy.ALL)
                             .centerCrop()
                     },
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.Center
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.CenterEnd
                 )
             }
         }
@@ -369,17 +365,16 @@ class MainActivity : ComponentActivity() {
         fun TextSearchBar(
             modifier: Modifier = Modifier,
             label: String,
-            onDoneActionClick: (String) -> Unit = {},
-            onFocusChanged: (FocusState) -> Unit = {},
         ) {
             val searchText = viewModel.searchText.observeAsState().value
 
             OutlinedTextField(
                 modifier = modifier
-                    .fillMaxWidth(1f)
-                    .onFocusChanged { onFocusChanged(it) },
+                    .fillMaxWidth(1f),
                 value = searchText!!,
-                onValueChange = { viewModel.setSearchText(it) },
+                onValueChange = {
+                    viewModel.setSearchText(it)
+                    viewModel.filterMovies(it) },
                 label = { Text(text = label) },
                 textStyle = MaterialTheme.typography.labelMedium,
                 singleLine = true,
@@ -388,11 +383,6 @@ class MainActivity : ComponentActivity() {
                         Icon(imageVector = Filled.Clear, contentDescription = "Clear")
                     }
                 },
-                keyboardActions = KeyboardActions(onSearch = { onDoneActionClick(searchText) }),
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search,
-                    keyboardType = KeyboardType.Text
-                )
             )
         }
 
@@ -426,7 +416,7 @@ class MainActivity : ComponentActivity() {
                 fos?.use {
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
                     runOnUiThread {
-                        viewModel.setSelectedPhoto(Photo())
+                        viewModel.setSelectedPhoto(Movie())
                         Toast.makeText(
                             this@MainActivity,
                             "$filename saved to Photos",

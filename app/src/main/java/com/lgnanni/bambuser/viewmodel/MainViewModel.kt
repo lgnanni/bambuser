@@ -2,27 +2,25 @@ package com.lgnanni.bambuser.viewmodel
 
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.gcorp.retrofithelper.Response
 import com.gcorp.retrofithelper.ResponseHandler
 import com.gcorp.retrofithelper.RetrofitClient
-import com.lgnanni.bambuser.data.Photo
-import com.lgnanni.bambuser.data.PhotosWrapper
-import com.lgnanni.bambuser.util.MainViewState
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import java.util.*
+import com.lgnanni.bambuser.data.Movie
+import com.lgnanni.bambuser.data.Movies
+
 
 class MainViewModel : ViewModel() {
 
-    private var _photos = MutableLiveData(emptyList<Photo>())
-    val photos: LiveData<List<Photo>> = _photos
+    private var _movies = MutableLiveData(emptyList<Movie>())
 
-    private var _selectedPhoto = MutableLiveData(Photo())
-    val selectedPhoto: LiveData<Photo> = _selectedPhoto
+    private var _filterMovies = MutableLiveData(emptyList<Movie>())
+    val filterMovies: LiveData<List<Movie>> = _filterMovies
+
+    private var _selectedMovie = MutableLiveData(Movie())
+    val selectedMovie: LiveData<Movie> = _selectedMovie
 
     private var _loading = MutableLiveData(false)
     val loading: LiveData<Boolean> = _loading
@@ -31,19 +29,20 @@ class MainViewModel : ViewModel() {
     val searchText: LiveData<String> = _searchText
 
     private var _isConnected = MutableLiveData(false)
-    val isConnected: LiveData<Boolean> = _isConnected
 
     private var _darkTheme = MutableLiveData(false)
     val darkTheme: LiveData<Boolean> = _darkTheme
+
 
     companion object {
         lateinit var retrofitClient: RetrofitClient
     }
 
-    private val API_BASE = "https://api.flickr.com/services/rest/"
-    private val API_KEY = "171f377e4b52f2cd6740dc0ce789b8e0"
+    private val API_BASE = "https://api.themoviedb.org/3/movie/"
+    private val API_HEADER_TOKEN = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1ZTk5N2VhODJiZmNkMTRmYTQyN2M1OTNhY2E1ZTUzZCIsInN1YiI6IjY1ODQwOTY3ODU4Njc4NTYzNWY2YWI2OSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.QbfUAnswzEFq2H4HOoLNt8vDgArbeVGpHvJGAD1kkj8"
+    private val API_PATH = "popular?language=en-US&page="
+    fun loadMovies(context: Context, page: Int = 1) {
 
-    fun loadPhotos(context: Context, tag: String = "bambuser") {
         _loading.value = true
         retrofitClient = RetrofitClient.instance
             .setBaseUrl(API_BASE)
@@ -52,29 +51,23 @@ class MainViewModel : ViewModel() {
             .enableCaching(context)
             .caching(true, context)
             //add Headers
-            .addHeader("Content-Type", "application/json")
-            .addHeader("client", "android")
-            .addHeader("language", Locale.getDefault().language)
-            .addHeader("os", android.os.Build.VERSION.RELEASE)
+            .addHeader("accept", "application/json")
+            .addHeader("Authorization", API_HEADER_TOKEN)
 
-        retrofitClient.Get<PhotosWrapper>()
-            .setPath("?method=flickr.photos.search" +
-                    "&api_key=$API_KEY" +
-                    "&tags=$tag" +
-                    "&media=photo" +
-                    "&per_page=21" +
-                    "&page=1" +
-                    "&format=json" +
-                    "&nojsoncallback=1")
-            .setResponseHandler(PhotosWrapper::class.java,
-                object : ResponseHandler<PhotosWrapper>() {
-                    override fun onSuccess(response: Response<PhotosWrapper>) {
+        retrofitClient.Get<Movies>()
+            .setPath(API_PATH + page)
+            .setResponseHandler(
+                Movies::class.java,
+                object : ResponseHandler<Movies>() {
+                    override fun onSuccess(response: Response<Movies>) {
                         super.onSuccess(response)
+                        _movies.value = response.body.results
+                        _filterMovies.value = _movies.value
                         _loading.value = false
-                        _photos.value = response.body.photos.photo
+
                     }
 
-                    override fun onError(response: Response<PhotosWrapper>?) {
+                    override fun onError(response: Response<Movies>?) {
                         super.onError(response)
                         _loading.value = false
                         Toast.makeText(context, response.toString(), Toast.LENGTH_LONG).show()
@@ -89,8 +82,11 @@ class MainViewModel : ViewModel() {
 
     }
 
-    fun setSelectedPhoto(photo: Photo) {
-        _selectedPhoto.value = photo
+    fun filterMovies(search: String) {
+        _filterMovies.value = _movies.value?.filter { it.title.contains(search, true) }
+    }
+    fun setSelectedPhoto(movie: Movie) {
+        _selectedMovie.value = movie
     }
 
     fun setSearchText(text: String) {
@@ -100,13 +96,6 @@ class MainViewModel : ViewModel() {
     fun setIsConnected(connected: Boolean) {
         _isConnected.value = connected
     }
-    fun refresh(context: Context) {
-        val tag = searchText.value!!.ifEmpty { "bambuser" }
-        loadPhotos(
-            context = context,
-            tag = tag)
-    }
-
     fun setDarkTheme(dark: Boolean) {
         _darkTheme.value = dark
     }
